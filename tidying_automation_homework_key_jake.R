@@ -1,0 +1,148 @@
+#PSYC 259 Homework 3 - Data Tidying and Automation
+#This assignment should be completed in RStudioCloud
+#For full credit, provide answers for at least 6/9 questions
+
+#List names of students collaborating with: 
+
+### SETUP: RUN THIS BEFORE STARTING ----------
+
+install.packages("tidyverse") #If not installed
+#Load packages
+library(tidyverse)
+paths <- c("https://raw.githubusercontent.com/jennybc/lotr-tidy/master/data/The_Fellowship_Of_The_Ring.csv",
+           "https://raw.githubusercontent.com/jennybc/lotr-tidy/master/data/The_Two_Towers.csv",
+           "https://raw.githubusercontent.com/jennybc/lotr-tidy/master/data/The_Return_Of_The_King.csv")
+
+#Read data
+#Each dataset has the words spoken by male/female characters in the LOTR triology by race (elf, hobbit, or human)
+
+ds1 <- read_csv(paths[1])
+ds2 <- read_csv(paths[2])
+ds3 <- read_csv(paths[3])
+ds_combined <- bind_rows(ds1, ds2, ds3)
+
+### Question 1 ---------- 
+
+#For this assignment, you created a fork from the Github repo and cloned your own copy
+#As you work on the assignment, make commits and push the changes to your own repository.
+#Make your repository public and paste the link here:
+
+#ANSWER
+#YOUR GITHUB LINK: 
+
+### Question 2 ---------- 
+
+#Use a for loop with paths to read the data in to a new tibble "ds_loop" so that the data are combined into a single dataset
+#(Yes, Vroom does this automatically but practice doing it with a loop)
+#If you did this correctly, it should look the same as ds_combined created above
+
+#ANSWER
+# initializing empty tibble with column headers
+ds_loops <- read_csv(paths[1]) %>% filter(FALSE)
+for (p in paths) {
+  ds_loops <- bind_rows(ds_loops, read_csv(p))
+}
+
+## JAKE
+## predefine way; more of a pain but with larger problems will be faster
+x <- names(ds_loops) # store column names
+dsAmt <- length(paths) # how many dataframes are we importing
+dsLen <- nrow(ds1) # number of rows
+ds_dat <- as.data.frame(matrix( ncol = ncol(ds_loops), nrow = dsLen*dsAmt )) # define dataframe
+# as number of columns from initial dataframe and number of rows of initial dataframe times
+# number of dataframes being imported
+for(k in 0:(length(paths)-1) ) {
+  i<-(1+3*k) # every 3rd row is the beginning of where you insert your dataframe
+  e<-i+(dsLen-1) # every 3 row plus 2 is the length of what is being improved
+  ds_dat[i:e, ] <- read.csv(paths[(k+1)]) # insert by position rather than bind rows
+}
+colnames(ds_dat) <- x # assign names
+
+### Question 3 ----------
+
+#Use map with paths to read in the data to a single tibble called ds_map
+#If you did this correctly, it should look the same as ds_combined created above
+
+#ANSWER
+ds_map <- map_dfr(paths, read_csv)
+
+### Question 4 ----------
+
+#The data are in a wider-than-ideal format. 
+#Use pivot_longer to reshape the data so that sex is a column with values male/female and words is a column
+#Use ds_combined or one of the ones you created in Question 2 or 3, and save the output to ds_longer
+
+#ANSWER
+ds_longer <- pivot_longer(ds_combined, Male:Female, names_to = "Sex", values_to = "Words")
+
+### Question 5 ----------
+
+#It's helpful to know how many words were spoken, but each book was a different length
+#The tibble below contains the total number of words in each book (make sure to run those lines so that it appears in your environment)
+#Merge it into ds_longer and then create a new column that expresses the words spoken as a percentage of the total
+total_words <- tibble(Film =  c("The Fellowship Of The Ring", "The Two Towers","The Return Of The King"),
+                      Total = c(177277, 143436, 134462))
+
+#ANSWER
+ds_longer <- ds_longer %>% left_join(total_words, by = "Film") %>% 
+  mutate(Percent = Words/Total * 100)
+
+### Question 6 ----------
+#The function below creates a graph to compare the words spoken by race/sex for a single film
+#The input for the function is a tibble that contains only a single film
+#Write a for loop that iterates through the film names to apply the function to a subset of ds_longer (each film)
+#Run all 6 lines code below to define the function (it should show in your environment after running)
+words_graph <- function(df) {
+  p <- ggplot(df, aes(x = Race, y = Words, fill = Sex)) + 
+    geom_bar(stat = "identity", position = "dodge") + 
+    ggtitle(df$Film) + theme_minimal()
+  print(p)
+}
+
+#ANSWER
+films <- unique(ds_longer$Film) #Or write them all out
+for (film in films) {
+  ds_longer %>% filter(Film == film) %>% words_graph
+}
+
+## JAKE, base R analogue
+for(film in films){
+  words_graph(ds_longer[ds_longer$Film==film,])
+}
+
+### Question 7 ----------
+
+#Apply the words_graph function again, but this time
+#use split and map to apply the function to each film separately
+
+#ANSWER
+ds_longer %>% split(.$Film) %>% map(words_graph)
+
+### Question 8 ---------- 
+
+#The PI wants a .csv file for each film with a row for male and a row for female
+#and separate columns for the words spoken by each race and the percentage of words spoken by each race
+#First, get the data formatted in the correct way
+#From ds_longer, create a new tibble "ds_wider" that has columns for words for each race and percentage for each race
+
+#ANSWER
+ds_wider <- ds_longer %>% pivot_wider(names_from = Race, values_from = c(Words, Percent))
+
+### Question 9 ---------
+
+#Using your new "ds_wider" tibble, write the three data files using either a for loop or map
+#The files should be written to "data_cleaned" and should be named by film title
+
+#ANSWER - Map
+films <- unique(ds_wider$Film)
+map(films, ~ write_csv(filter(ds_wider, Film == .x), paste0("data_cleaned/",.x,".csv")))
+
+#base r sorta
+apply( df, function(x) x*2 )
+
+#ANSWER - for loop
+films <- unique(ds_wider$Film)
+for (film in films) {
+  ds_wider %>% filter(Film == film) %>% write_csv(paste0("data_cleaned/",film,".csv"))
+}
+
